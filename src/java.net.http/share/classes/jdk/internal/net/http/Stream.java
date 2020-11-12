@@ -42,6 +42,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.Flow;
 import java.util.concurrent.Flow.Subscription;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiFunction;
 import java.util.function.BiPredicate;
 import java.net.http.HttpClient;
 import java.net.http.HttpHeaders;
@@ -468,8 +469,15 @@ class Stream<T> extends ExchangeImpl<T> {
 
     // The Hpack decoder decodes into one of these consumers of name,value pairs
 
-    DecodingCallback rspHeadersConsumer() {
-        return rspHeadersConsumer;
+    DecodingCallback rspHeadersConsumer() { return rspHeadersConsumer; }
+
+    private void processAltSvcHeader(HttpHeaders httpHeaders, BiFunction<? super String, ? super List<String>, ? extends List<String>> processAlt) {
+        List<String> altSvc = httpHeaders.map()
+                                         .computeIfPresent("alt-svc", processAlt);
+    }
+
+    List<String> mapAltSvcHeaders(String key, List<String> val) {
+        return val;
     }
 
     protected void handleResponse() throws IOException {
@@ -477,6 +485,8 @@ class Stream<T> extends ExchangeImpl<T> {
         responseCode = (int)responseHeaders
                 .firstValueAsLong(":status")
                 .orElseThrow(() -> new IOException("no statuscode in response"));
+
+        processAltSvcHeader(responseHeaders, this::mapAltSvcHeaders);
 
         response = new Response(
                 request, exchange, responseHeaders, connection(),
