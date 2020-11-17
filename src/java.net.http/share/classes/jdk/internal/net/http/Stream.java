@@ -49,6 +49,8 @@ import java.net.http.HttpHeaders;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.net.http.HttpResponse.BodySubscriber;
+import java.util.function.Consumer;
+
 import jdk.internal.net.http.common.*;
 import jdk.internal.net.http.frame.*;
 import jdk.internal.net.http.hpack.DecodingCallback;
@@ -471,22 +473,19 @@ class Stream<T> extends ExchangeImpl<T> {
 
     DecodingCallback rspHeadersConsumer() { return rspHeadersConsumer; }
 
-    private void processAltSvcHeader(HttpHeaders httpHeaders, BiFunction<? super String, ? super List<String>, ? extends List<String>> processAlt) {
-        List<String> altSvc = httpHeaders.map()
-                                         .computeIfPresent("alt-svc", processAlt);
+    private void processAltSvcHeader(List<String> altSvcVals, Consumer<List<String>> altSvcRegistry) {
+        if (altSvcVals != null || altSvcVals.size() != 0)
+            altSvcRegistry.accept(altSvcVals);
     }
 
-    List<String> mapAltSvcHeaders(String key, List<String> val) {
-        return val;
-    }
 
     protected void handleResponse() throws IOException {
         HttpHeaders responseHeaders = responseHeadersBuilder.build();
         responseCode = (int)responseHeaders
                 .firstValueAsLong(":status")
                 .orElseThrow(() -> new IOException("no statuscode in response"));
-
-        processAltSvcHeader(responseHeaders, this::mapAltSvcHeaders);
+        List<String> altSvcVals = responseHeaders.allValues("alt-svc");
+            processAltSvcHeader(altSvcVals, AltSvcProcess::mapAltSvcHeaders);
 
         response = new Response(
                 request, exchange, responseHeaders, connection(),
